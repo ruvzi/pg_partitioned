@@ -8,12 +8,17 @@ module PgPartitioned
     before_validation :add_domain_year!, on: :create
     validates :domain_year, presence: true
 
-    scope :partitioned, -> (resource) { where(domain_year: resource.domain_year) }
+    class << self
+      def table_prefix(value)
+        d, y = value.to_s.scan(/(\d+)(\d{4})/).first # [domain_id,year].join
+        "y#{y}_#{d}"
+      end
 
-    def self.table_prefix(value)
-      d, y = value.to_s.scan(/(\d+)(\d{4})/).first # [domain_id,year].join
-      "y#{y}_#{d}"
+      def normalize_new_partition_value(domain_id)
+        [domain_id, Date.today.year].join
+      end
     end
+
 
     private
 

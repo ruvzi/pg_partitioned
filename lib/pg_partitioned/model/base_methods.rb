@@ -20,7 +20,7 @@ module PgPartitioned
       end
 
       def with_partition_schema?
-        true
+        false
       end
 
       def partition_table_name(partition_key_value)
