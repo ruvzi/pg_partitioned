@@ -79,7 +79,14 @@ module ActiveRecord
   module QueryMethods
 
     def build_arel
-      actual_arel_table = @klass.dynamic_arel_table(Hash[*bind_values.map{ |bv| [bv.first.name, connection.quote(*bv.reverse)]}.flatten], @klass.table_name) if @klass.respond_to?(:dynamic_arel_table)
+      if @klass.respond_to?(:dynamic_arel_table) && false
+        if bind_values.present?
+          Rails.logger.debug('build_arel')
+          Rails.logger.debug(bind_values)
+          Rails.logger.debug(bind_values.map{ |bv| [bv.first.name, connection.quote(*bv.reverse)]}.flatten)
+        end
+        actual_arel_table = @klass.dynamic_arel_table(Hash[*bind_values.map{ |bv| [bv.first.name, connection.quote(*bv.reverse)]}.flatten], @klass.table_name)
+      end
       actual_arel_table ||= table
       arel = Arel::SelectManager.new(table.engine, actual_arel_table)
 
