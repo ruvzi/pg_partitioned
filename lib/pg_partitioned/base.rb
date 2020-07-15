@@ -36,7 +36,7 @@ module PgPartitioned
       end
 
       def dynamic_arel_table(values, as = nil)
-        return if (key_value = self.partition_key_value(values)).blank?
+        return if (key_value = self.partition_key_value(values)).blank? || key_value == 'NULL'
         arel_table_from_key_value(key_value, as)
       end
 
