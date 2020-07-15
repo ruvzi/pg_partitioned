@@ -1,6 +1,6 @@
 require "pg_partitioned/config"
 require "pg_partitioned/cache"
-require "pg_partitioned/monkey_patch_activerecord"
+# require "pg_partitioned/monkey_patch_activerecord"
 
 module PgPartitioned
   @config = Config.new
