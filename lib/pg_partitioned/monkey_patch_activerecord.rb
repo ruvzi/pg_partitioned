@@ -79,13 +79,8 @@ module ActiveRecord
   module QueryMethods
 
     def build_arel
-      if @klass.respond_to?(:dynamic_arel_table) && false
-        if bind_values.present?
-          Rails.logger.debug('build_arel')
-          Rails.logger.debug(bind_values)
-          Rails.logger.debug(bind_values.map{ |bv| [bv.first.name, connection.quote(*bv.reverse)]}.flatten)
-        end
-        actual_arel_table = @klass.dynamic_arel_table(Hash[*bind_values.map{ |bv| [bv.first.name, connection.quote(*bv.reverse)]}.flatten], @klass.table_name)
+      if bind_values.present? && @klass.respond_to?(:dynamic_arel_table)
+        actual_arel_table = @klass.dynamic_arel_table(Hash[*bind_values.map{ |c, v| [c.name, c.cast_type.type_cast_for_database(v)]}.flatten], @klass.table_name)
       end
       actual_arel_table ||= table
       arel = Arel::SelectManager.new(table.engine, actual_arel_table)
@@ -110,6 +105,19 @@ module ActiveRecord
 
       arel
     end
+
+    # def build_select(arel)
+    #   if select_values.any?
+    #     arel.project(*arel_columns(select_values.uniq))
+    #   else
+    #     Rails.logger.debug('build_select')
+    #     Rails.logger.debug(@klass.arel_table[Arel.star])
+    #     Rails.logger.debug(table[Arel.star])
+    #     Rails.logger.debug('build_select end')
+    #     # arel.project(table[Arel.star])
+    #     arel.project(@klass.arel_table[Arel.star])
+    #   end
+    # end
   end # module QueryMethods
 
   class Relation
@@ -186,4 +194,17 @@ module ActiveRecord
       end
     end
   end # class Relation
+
+  module Associations
+    class Association
+      def skip_statement_cache?
+        reflection.scope_chain.any?(&:any?) ||
+          scope.eager_loading? ||
+          klass.current_scope ||
+          klass.default_scopes.any? ||
+          reflection.source_reflection.active_record.default_scopes.any? ||
+          (klass.try(:partitioned?) && klass.partition_association?(reflection))
+      end
+    end
+  end # class Associations
 end # module ActiveRecord
