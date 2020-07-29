@@ -5,7 +5,7 @@ module PgPartitioned
     partition_by :domain_year
 
     belongs_to :domain
-    before_validation :add_domain_year!, on: :create
+    before_create :add_domain_year!
     validates :domain_year, presence: true
 
     class << self
@@ -28,7 +28,7 @@ module PgPartitioned
     private
 
     def add_domain_year!
-      self.domain_year = yearly_resource.domain_year
+      self.domain_year ||= yearly_resource.domain_year
     end
   end
 end
