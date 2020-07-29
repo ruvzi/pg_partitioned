@@ -76,6 +76,12 @@ module PgPartitioned
         ActiveRecord::Relation.new(self, self.arel_table_from_key_value(partition_key_value, table_alias_name))
       end
 
+      def from_partition_with_create(partition_key_value)
+        partition_table_name = partition_table_name(partition_key_value)
+        create_new_partition(partition_key_value) unless partitions.include?(partition_table_name)
+        from_partition(partition_key_value)
+      end
+
       def in_partition(child_table_name)
         from_partition(child_table_name_value(child_table_name))
       end

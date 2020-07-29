@@ -47,4 +47,6 @@ ActiveSupport.on_load(:active_record) do
   require 'pg_partitioned/range'
   require 'pg_partitioned/by_domain_id'
   require 'pg_partitioned/by_domain_year'
+  require 'pg_partitioned/by_campaign_id'
+  require 'pg_partitioned/by_day_stamp'
 end

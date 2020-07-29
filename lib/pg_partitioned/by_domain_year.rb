@@ -14,6 +14,11 @@ module PgPartitioned
         "y#{y}_#{d}"
       end
 
+      def child_table_name_value(child_table_name)
+        prefix = child_table_name.split('.', 2).last.sub(table_name, '').tr('_', '')
+        prefix.to_s.scan(/y(\d{4})_(\d+)/).first.reverse.join # "y#{year}_#{domain_id}" -> [domain_id,year].join
+      end
+
       def normalize_new_partition_value(domain_id)
         [domain_id, Date.today.year].join
       end
