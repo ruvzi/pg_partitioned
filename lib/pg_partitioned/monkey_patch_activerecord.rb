@@ -140,7 +140,7 @@ module ActiveRecord
 
       im = arel.create_insert
       # ****** BEGIN PARTITIONED PATCH ******
-      actual_arel_table = @klass.dynamic_arel_table(Hash[*values.map{|k,v| [k.name,v]}.flatten]) if @klass.respond_to?(:dynamic_arel_table)
+      actual_arel_table = @klass.dynamic_arel_table(Hash[*values.map{|k,v| [k.name,v]}.flatten(1)]) if @klass.respond_to?(:dynamic_arel_table)
       actual_arel_table ||= @table
       # Original line:
       # im.into @table
