@@ -59,7 +59,9 @@ module PgPartitioned
 
         unless new_arel_table
           arel_engine_hash = { engine: self.arel_engine, as: as}
-          new_arel_table = Arel::Table.new(self.partition_table_name(partition_key_value), arel_engine_hash)
+          partition_table_name = self.partition_table_name(partition_key_value)
+          create_new_partition(partition_key_value) unless partitions.include?(partition_table_name)
+          new_arel_table = Arel::Table.new(partition_table_name, arel_engine_hash)
           @arel_tables[[partition_key_value, as]] = new_arel_table
         end
 

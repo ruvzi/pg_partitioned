@@ -9,7 +9,7 @@ module CollectiveIdea #:nodoc:
             options = {:order => { order_column => :asc }}.merge(options)
             conditions = options[:conditions]
             collection = try(:partitioned?) && conditions && conditions.keys.include?(partition_key) ?
-                           from_partition(partition_key_value(conditions)) :
+                           from_partition_with_create(partition_key_value(conditions)) :
                            self
             collection.where(conditions).order(options.delete(:order))
           end
