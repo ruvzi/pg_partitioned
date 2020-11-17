@@ -13,7 +13,6 @@ module PgPartitioned
       def belongs_to_with_partitioned(target, options = {})
         partition_key = options.delete(:partition_key)
         result = belongs_to_without_partitioned(target, options)
-        return result
 
         if partition_key
           result[target.to_s].options[:partition_key] = partition_key
@@ -24,7 +23,7 @@ module PgPartitioned
                   owner_partition_key = association.owner.send(association.options[:partition_key])
                   return #{target}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
                     
-                  association.klass.from_partition_with_create(owner_partition_key).find_by(id: association.owner.send(association.reflection.foreign_key))
+                  association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{target}_without_partitioned_unscoped(*args) }
                 end
                 alias_method_chain :#{target}, :partitioned_unscoped
             RUBY
