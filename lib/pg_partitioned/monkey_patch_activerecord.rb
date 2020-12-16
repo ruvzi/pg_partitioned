@@ -194,17 +194,4 @@ module ActiveRecord
       end
     end
   end # class Relation
-
-  module Associations
-    class Association
-      def skip_statement_cache?
-        reflection.scope_chain.any?(&:any?) ||
-          scope.eager_loading? ||
-          klass.current_scope ||
-          klass.default_scopes.any? ||
-          reflection.source_reflection.active_record.default_scopes.any? ||
-          (klass.try(:partitioned?) && klass.partition_association?(reflection))
-      end
-    end
-  end # class Associations
 end # module ActiveRecord

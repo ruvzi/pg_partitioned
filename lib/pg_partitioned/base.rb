@@ -20,37 +20,7 @@ module PgPartitioned
     class << self
       def partition_key_value(values)
         values.symbolize_keys!
-        values[partition_key] ||
-            partition_association_value(values)
-      end
-
-      def partition_association_value(values)
-        return if partition_association_keys.empty?
-        return if (attrs = values.slice(*partition_association_keys)).empty?
-        begin
-          partition_association(attrs)&.send(partition_key)
-        rescue
-          nil
-        end
-      end
-
-      def partition_association_keys
-        []
-      end
-
-      def partition_association(_attrs)
-        nil
-      end
-
-      def partition_association?(reflection)
-        reflection.foreign_key == partition_key.to_s ||
-          reflection.active_record.try(:partition_key) == partition_key ||
-          ((nested_partition_keys = reflection.active_record.try(:nested_partition_keys)).present? &&
-            nested_partition_keys.include?(partition_key))
-      end
-
-      def nested_partition_keys
-        []
+        values[partition_key]
       end
 
       def arel_table_from_key_value(partition_key_value, as = nil) #+
