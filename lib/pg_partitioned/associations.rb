@@ -50,9 +50,8 @@ module PgPartitioned
                   association = association(:#{name})
                   owner_partition_key = association.owner.send(association.options[:partition_key])
                   return #{name}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
-                    
-                  where_hash = #{name}_without_partitioned_unscoped(*args).where_values_hash
-                  association.klass.where(association.options[:partition_key] => owner_partition_key).where(where_hash)
+                  
+                  #{name}_without_partitioned_unscoped(*args).where(association.options[:partition_key] => owner_partition_key)
                 end
                 alias_method_chain :#{name}, :partitioned_unscoped
             RUBY
