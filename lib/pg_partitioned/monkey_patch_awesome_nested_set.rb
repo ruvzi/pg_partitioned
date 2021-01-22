@@ -39,8 +39,6 @@ module CollectiveIdea #:nodoc:
             :inverse_of => (:parent unless acts_as_nested_set_options[:polymorphic]),
             :partition_key => acts_as_nested_set_options[:partition_key]
         }
-        children_scope = acts_as_nested_set_options[:children_scope] || -> { order(order_column => :asc) }
-
         # Add callbacks, if they were supplied.. otherwise, we don't want them.
         [:before_add, :after_add, :before_remove, :after_remove].each do |ar_callback|
           has_many_children_options.update(
@@ -48,7 +46,8 @@ module CollectiveIdea #:nodoc:
           ) if acts_as_nested_set_options[ar_callback]
         end
 
-        has_many :children, children_scope, has_many_children_options
+        has_many :children, -> { order(order_column => :asc) },
+                 has_many_children_options
       end
     end
   end
