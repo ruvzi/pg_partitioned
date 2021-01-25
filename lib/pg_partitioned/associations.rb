@@ -23,7 +23,7 @@ module PgPartitioned
                 def #{target}_with_partitioned_unscoped(*args)
                   association = association(:#{target})
                   owner_partition_key = association.owner.send(association.options[:partition_key])
-                  return #{target}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
+                  return #{target}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
                     
                   association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{target}_without_partitioned_unscoped(*args) }
                 end
@@ -49,7 +49,7 @@ module PgPartitioned
                 def #{name}_with_partitioned_unscoped(*args)
                   association = association(:#{name})
                   owner_partition_key = association.owner.send(association.options[:partition_key])
-                  return #{name}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
+                  return #{name}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
                   
                   #{name}_without_partitioned_unscoped(*args).where(association.options[:partition_key] => owner_partition_key)
                 end
