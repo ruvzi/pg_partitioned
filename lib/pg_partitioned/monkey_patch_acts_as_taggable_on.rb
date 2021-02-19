@@ -29,7 +29,6 @@ module ActsAsTaggableOn
       include Cache
       include Ownership
       include Related
-      include Dirty
     end
   end
 end
