@@ -1,7 +1,6 @@
 require 'active_record'
 require 'active_record/base'
 require 'active_record/connection_adapters/abstract_adapter'
-require 'active_record/relation.rb'
 require 'active_record/persistence.rb'
 require 'active_record/relation/query_methods.rb'
 
@@ -15,62 +14,54 @@ module ActiveRecord
   #
   module Persistence
 
-    def _delete_record(constraints) # :nodoc:
-      constraints = _substitute_values(constraints).map { |attr, bind| attr.eq(bind) }
-      using_arel_table = self.class.respond_to?(:dynamic_arel_table) ? dynamic_arel_table : arel_table
+    module ClassMethods
+      def _insert_record(values)
+        primary_key = self.primary_key
+        primary_key_value = nil
 
-      dm = Arel::DeleteManager.new
-      dm.from(using_arel_table)
-      dm.wheres = constraints
+        if primary_key && Hash === values
+          primary_key_value = values[primary_key]
 
-      connection.delete(dm, "#{self} Destroy")
-    end
+          if !primary_key_value && prefetch_primary_key?
+            primary_key_value = next_sequence_value
+            values[primary_key] = primary_key_value
+          end
+        end
 
-    # This method is patched to provide a relation referencing the partition instead
-    # of the parent table.
-    # def relation_for_destroy #?
-    #   pk         = self.class.primary_key
-    #   column     = self.class.columns_hash[pk]
-    #   substitute = self.class.connection.substitute_at(column)
-    #
-    #   # ****** BEGIN PARTITIONED PATCH ******
-    #   if self.class.respond_to?(:dynamic_arel_table)
-    #     using_arel_table = dynamic_arel_table
-    #     relation = ActiveRecord::Relation.new(self.class, using_arel_table).
-    #         where(using_arel_table[pk].eq(substitute))
-    #   else
-    #     # ****** END PARTITIONED PATCH ******
-    #     relation = self.class.unscoped.where(
-    #         self.class.arel_table[pk].eq(substitute))
-    #     # ****** BEGIN PARTITIONED PATCH ******
-    #   end
-    #   # ****** END PARTITIONED PATCH ******
-    #
-    #   relation.bind_values = [[column, id]]
-    #   relation
-    # end
+        if values.empty?
+          im = arel_table.compile_insert(connection.empty_insert_statement_value(primary_key))
+          im.into arel_table
+        else
+          im = arel_table.compile_insert(_substitute_values(values))
+          if respond_to?(:dynamic_arel_table)
+            actual_arel_table = dynamic_arel_table(values) || arel_table
+            im.into actual_arel_table
+          end
+        end
 
-    def _create_record(attribute_names = self.attribute_names)
-      if self.class.respond_to?(:partition_key)
-        attribute_names.concat [self.class.partition_key.to_s]
-        attribute_names.uniq!
+        connection.insert(im, "#{self} Create", primary_key || false, primary_key_value)
       end
 
-      attribute_names = attributes_for_create(attribute_names)
+      def _update_record(values, constraints)
+        constraints = _substitute_values(constraints).map { |attr, bind| attr.eq(bind) }
 
-      new_id = self.class.unscoped._insert_record(
-        attributes_with_values(attribute_names)
-      )
-      self.id ||= new_id if @primary_key
+        if respond_to?(:dynamic_arel_table)
+          using_arel_table = dynamic_arel_table(values)
+          using_arel_table ||= arel_table
+          arel_table.name = using_arel_table.name
+        end
 
-      @new_record = false
-      @previously_new_record = true
+        um = arel_table.where(
+          constraints.reduce(&:and)
+        ).compile_update(_substitute_values(values), primary_key)
 
-      yield(self) if block_given?
-      id
+        rs = connection.update(um, "#{self} Update")
+        arel_table.name = table_name
+        rs
+      end
     end
 
-    def _update_record(attribute_names = @attributes.keys)
+    def _update_record(attribute_names = self.attribute_names)
       if self.class.respond_to?(:partition_key)
         attribute_names.concat [self.class.partition_key.to_s]
         attribute_names.uniq!
@@ -93,124 +84,67 @@ module ActiveRecord
       affected_rows
     end
 
+    def _create_record(attribute_names = self.attribute_names)
+      if self.class.respond_to?(:partition_key)
+        attribute_names.concat [self.class.partition_key.to_s]
+        attribute_names.uniq!
+      end
+
+      attribute_names = attributes_for_create(attribute_names)
+
+      new_id = self.class.unscoped._insert_record(
+        attributes_with_values(attribute_names)
+      )
+      self.id ||= new_id if @primary_key
+
+      @new_record = false
+      @previously_new_record = true
+
+      yield(self) if block_given?
+      id
+    end
   end # module Persistence
 
   module QueryMethods
 
-    # def build_arel
-    #   if bind_values.present? && @klass.respond_to?(:dynamic_arel_table)
-    #     actual_arel_table = @klass.dynamic_arel_table(Hash[*bind_values.map{ |c, v| [c.name, c.cast_type.type_cast_for_database(v)]}.flatten], @klass.table_name)
-    #   end
-    #   actual_arel_table ||= table
-    #   arel = Arel::SelectManager.new(table.engine, actual_arel_table)
-    #
-    #   build_joins(arel, joins_values.flatten) unless joins_values.empty?
-    #
-    #   collapse_wheres(arel, (where_values - [''])) #TODO: Add uniq with real value comparison / ignore uniqs that have binds
-    #
-    #   arel.having(*having_values.uniq.reject(&:blank?)) unless having_values.empty?
-    #
-    #   arel.take(connection.sanitize_limit(limit_value)) if limit_value
-    #   arel.skip(offset_value.to_i) if offset_value
-    #   arel.group(*arel_columns(group_values.uniq.reject(&:blank?))) unless group_values.empty?
-    #
-    #   build_order(arel)
-    #
-    #   build_select(arel)
-    #
-    #   arel.distinct(distinct_value)
-    #   arel.from(build_from) if from_value
-    #   arel.lock(lock_value) if lock_value
-    #
-    #   arel
-    # end
+    def build_arel(aliases)
+      if where_clause.present? && @klass.respond_to?(:dynamic_arel_table)
+        actual_arel_table = @klass.dynamic_arel_table(where_clause.to_h, @klass.table_name)
+      end
+      actual_arel_table ||= table
+      arel = Arel::SelectManager.new(actual_arel_table)
 
-    # def build_select(arel)
-    #   if select_values.any?
-    #     arel.project(*arel_columns(select_values.uniq))
-    #   else
-    #     Rails.logger.debug('build_select')
-    #     Rails.logger.debug(@klass.arel_table[Arel.star])
-    #     Rails.logger.debug(table[Arel.star])
-    #     Rails.logger.debug('build_select end')
-    #     # arel.project(table[Arel.star])
-    #     arel.project(@klass.arel_table[Arel.star])
-    #   end
-    # end
+      build_joins(arel.join_sources, aliases)
+
+      arel.where(where_clause.ast) unless where_clause.empty?
+      arel.having(having_clause.ast) unless having_clause.empty?
+      arel.take(build_cast_value("LIMIT", connection.sanitize_limit(limit_value))) if limit_value
+      arel.skip(build_cast_value("OFFSET", offset_value.to_i)) if offset_value
+      arel.group(*arel_columns(group_values.uniq)) unless group_values.empty?
+
+      build_order(arel)
+      build_select(arel)
+
+      arel.optimizer_hints(*optimizer_hints_values) unless optimizer_hints_values.empty?
+      arel.distinct(distinct_value)
+      arel.from(build_from) unless from_clause.empty?
+      arel.lock(lock_value) if lock_value
+
+      unless annotate_values.empty?
+        annotates = annotate_values
+        annotates = annotates.uniq if annotates.size > 1
+        unless annotates == annotate_values
+          ActiveSupport::Deprecation.warn(<<-MSG.squish)
+              Duplicated query annotations are no longer shown in queries in Rails 6.2.
+              To migrate to Rails 6.2's behavior, use `uniq!(:annotate)` to deduplicate query annotations
+              (`#{klass.name&.tableize || klass.table_name}.uniq!(:annotate)`).
+          MSG
+          annotates = annotate_values
+        end
+        arel.comment(*annotates)
+      end
+
+      arel
+    end
   end # module QueryMethods
-
-  class Relation
-
-    # This method is patched to use a table name that is derived from
-    # the attribute values.
-    # def insert(values) # :nodoc:
-    #   primary_key_value = nil
-    #
-    #   if primary_key && Hash === values
-    #     primary_key_value = values[values.keys.find { |k|
-    #       k.name == primary_key
-    #     }]
-    #
-    #     if !primary_key_value && connection.prefetch_primary_key?(klass.table_name)
-    #       primary_key_value = connection.next_sequence_value(klass.sequence_name)
-    #       values[klass.arel_table[klass.primary_key]] = primary_key_value
-    #     end
-    #   end
-    #
-    #   im = arel.create_insert
-    #   # ****** BEGIN PARTITIONED PATCH ******
-    #   actual_arel_table = @klass.dynamic_arel_table(Hash[*values.map{|k,v| [k.name,v]}.flatten(1)]) if @klass.respond_to?(:dynamic_arel_table)
-    #   actual_arel_table ||= @table
-    #   # Original line:
-    #   # im.into @table
-    #   im.into actual_arel_table
-    #   # ****** END PARTITIONED PATCH ******
-    #
-    #   substitutes, binds = substitute_values values
-    #
-    #   if values.empty? # empty insert
-    #     im.values = Arel.sql(connection.empty_insert_statement_value)
-    #   else
-    #     im.insert substitutes
-    #   end
-    #
-    #   @klass.connection.insert(
-    #       im,
-    #       'SQL',
-    #       primary_key,
-    #       primary_key_value,
-    #       nil,
-    #       binds)
-    # end
-
-    # def _update_record(values, id, id_was) # :nodoc:
-    #   substitutes, binds = substitute_values values
-    #
-    #   scope = @klass.unscoped
-    #
-    #   if @klass.finder_needs_type_condition?
-    #     scope.unscope!(where: @klass.inheritance_column)
-    #   end
-    #
-    #   if @klass.respond_to?(:dynamic_arel_table)
-    #     using_arel_table = @klass.dynamic_arel_table(Hash[*values.map { |k,v| [k.name,v] }.flatten(1)])
-    #     relation = scope.where(using_arel_table[@klass.primary_key].eq(id_was || id))
-    #
-    #     bvs = binds + relation.bind_values
-    #     um = relation.arel.compile_update(substitutes, @klass.primary_key)
-    #     begin
-    #       @klass.arel_table.name = using_arel_table.name
-    #       @klass.connection.update(um, 'SQL', bvs)
-    #     ensure
-    #       @klass.arel_table.name = @klass.table_name
-    #     end
-    #   else
-    #     relation = scope.where(@klass.primary_key => (id_was || id))
-    #     bvs = binds + relation.bind_values
-    #     um = relation.arel.compile_update(substitutes, @klass.primary_key)
-    #
-    #     @klass.connection.update(um, 'SQL', bvs)
-    #   end
-    # end
-  end # class Relation
 end # module ActiveRecord

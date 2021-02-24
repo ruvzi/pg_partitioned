@@ -2,84 +2,83 @@ module PgPartitioned
 
   # Adds partition_key to belongs_to , has_one and has_many
   module Associations
-    def self.included(base)
-      base.extend ClassMethods
-      class << base
-        alias_method_chain :belongs_to, :partitioned
-        alias_method_chain :has_many, :partitioned
-        alias_method_chain :has_one, :partitioned
-      end
-    end
-
-    module ClassMethods
-      def belongs_to_with_partitioned(target, options = {})
+    module PartitionedBelongsTo
+      def belongs_to(target, options = {})
         partition_key = options.delete(:partition_key)
-        result = belongs_to_without_partitioned(target, options)
-
+        result = super(target, options)
         if partition_key
           result[target.to_s].options[:partition_key] = partition_key
           unless method_defined? "#{target}_with_partitioned_unscoped"
             class_eval <<-RUBY, __FILE__, __LINE__
-                def #{target}_with_partitioned_unscoped(*args)
-                  association = association(:#{target})
-                  owner_partition_key = association.owner.send(association.options[:partition_key])
-                  return #{target}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
+              alias_method :#{target}_without_partitioned_unscoped, :#{target}
+              alias_method :#{target}, ::#{target}_with_partitioned_unscoped
+
+              def #{target}_with_partitioned_unscoped(*args)
+                association = association(:#{target})
+                owner_partition_key = association.owner.send(association.options[:partition_key])
+                return #{target}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
                     
-                  association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{target}_without_partitioned_unscoped(*args) }
-                end
-                alias_method_chain :#{target}, :partitioned_unscoped
+                association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{target}_without_partitioned_unscoped(*args) }
+              end
             RUBY
           end
         end
 
         result
       end
+    end
 
-      def has_many_with_partitioned(name, scope = nil, options = {}, &extension)
+    module PartitionedHasMany
+      def has_many(name, scope = nil, options = {}, &extension)
         if scope.is_a?(Hash)
           options = scope
           scope   = nil
         end
         partition_key = options.delete(:partition_key)
-        result = has_many_without_partitioned(name, scope, options, &extension)
+        result = super(name, scope, options, &extension)
         if partition_key
           result[name.to_s].options[:partition_key] = partition_key
           unless method_defined? "#{name}_with_partitioned_unscoped"
             class_eval <<-RUBY, __FILE__, __LINE__
-                def #{name}_with_partitioned_unscoped(*args)
-                  association = association(:#{name})
-                  owner_partition_key = association.owner.send(association.options[:partition_key])
-                  return #{name}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
+              alias_method :#{name}_without_partitioned_unscoped, :#{name}
+              alias_method :#{name}, ::#{name}_with_partitioned_unscoped
+
+              def #{name}_with_partitioned_unscoped(*args)
+                association = association(:#{name})
+                owner_partition_key = association.owner.send(association.options[:partition_key])
+                return #{name}_without_partitioned_unscoped(*args) if !association.klass.try(:partitioned?) || args.present? || owner_partition_key.blank?
                   
-                  #{name}_without_partitioned_unscoped(*args).where(association.options[:partition_key] => owner_partition_key)
-                end
-                alias_method_chain :#{name}, :partitioned_unscoped
+                #{name}_without_partitioned_unscoped(*args).where(association.options[:partition_key] => owner_partition_key)
+              end
             RUBY
           end
         end
 
         result
       end
+    end
 
-      def has_one_with_partitioned(name, scope = nil, options = {}, &extension)
+    module PartitionedHasOne
+      def has_one(name, scope = nil, options = {}, &extension)
         if scope.is_a?(Hash)
           options = scope
           scope   = nil
         end
         partition_key = options.delete(:partition_key)
-        result = has_one_without_partitioned(name, scope, options, &extension)
+        result = super(name, scope, options, &extension)
         if partition_key
           result[name.to_s].options[:partition_key] = partition_key
           unless method_defined? "#{name}_with_partitioned_unscoped"
             class_eval <<-RUBY, __FILE__, __LINE__
-                def #{name}_with_partitioned_unscoped(*args)
-                  association = association(:#{name})
-                  owner_partition_key = association.owner.send(association.options[:partition_key])
-                  return #{name}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
-                    
-                  association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{name}_without_partitioned_unscoped(*args) }
-                end
-                alias_method_chain :#{name}, :partitioned_unscoped
+              alias_method :#{name}_without_partitioned_unscoped, :#{name}
+              alias_method :#{name}, ::#{name}_with_partitioned_unscoped
+              def #{name}_with_partitioned_unscoped(*args)
+                association = association(:#{name})
+                owner_partition_key = association.owner.send(association.options[:partition_key])
+                return #{name}_without_partitioned_unscoped(*args) if !association.klass.partitioned? || args.present? || owner_partition_key.blank?
+                  
+                association.klass.where(association.options[:partition_key] => owner_partition_key).scoping { #{name}_without_partitioned_unscoped(*args) }
+              end
             RUBY
           end
         end
@@ -107,5 +106,7 @@ module PgPartitioned
   # end
 end
 
-ActiveRecord::Base.send :include, PgPartitioned::Associations
+ActiveRecord::Base.prepend PgPartitioned::Associations::PartitionedBelongsTo
+ActiveRecord::Base.prepend PgPartitioned::Associations::PartitionedHasMany
+ActiveRecord::Base.prepend PgPartitioned::Associations::PartitionedHasOne
 # ActiveRecord::Associations::Preloader::Association.send :include, PgPartitioned::PreloaderAssociation

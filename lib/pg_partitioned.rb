@@ -4,6 +4,7 @@ require "pg_partitioned/monkey_patch_activerecord"
 require "pg_partitioned/monkey_patch_awesome_nested_set"
 require "pg_partitioned/monkey_patch_acts_as_taggable_on"
 require "pg_partitioned/monkey_patch_acts_as_commentable_with_threading"
+require "pg_partitioned/monkey_patch_paranoia"
 require "pg_partitioned/associations"
 
 module PgPartitioned
