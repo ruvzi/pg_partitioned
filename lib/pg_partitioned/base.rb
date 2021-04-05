@@ -30,6 +30,7 @@ module PgPartitioned
         unless new_arel_table
           arel_engine_hash = { engine: self.arel_engine, as: as}
           partition_table_name = self.partition_table_name(partition_key_value)
+          PgPartitioned.cache.clear! unless partitions.include?(partition_table_name)
           create_new_partition(partition_key_value) unless partitions.include?(partition_table_name)
           new_arel_table = Arel::Table.new(partition_table_name, arel_engine_hash)
           @arel_tables[[partition_key_value, as]] = new_arel_table
@@ -50,11 +51,8 @@ module PgPartitioned
 
       def from_partition_with_create(partition_key_value)
         partition_table_name = partition_table_name(partition_key_value)
-        unless partitions.include?(partition_table_name)
-          PgPartitioned.cache.clear!
-          create_new_partition(partition_key_value)
-          PgPartitioned.cache.clear!
-        end
+        PgPartitioned.cache.clear! unless partitions.include?(partition_table_name)
+        create_new_partition(partition_key_value) unless partitions.include?(partition_table_name)
         from_partition(partition_key_value)
       end
 
