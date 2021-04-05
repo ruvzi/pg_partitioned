@@ -14,8 +14,10 @@ module PgPartitioned
       def create_new_partition(value)
         partition_value = normalize_new_partition_value(value)
         new_partition_table = partition_table_name(partition_value)
+        PgPartitioned.cache.clear!
         return if partitions.include?(new_partition_table)
         create_partition(values: [partition_value], name: new_partition_table)
+        PgPartitioned.cache.clear!
       end
 
       def normalize_new_partition_value(value)
